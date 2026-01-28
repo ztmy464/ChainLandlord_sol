@@ -4,7 +4,8 @@
 
 ## 项目概述
 
-https://chainlandlord11.vercel.app/frontend/index.html
+https://chainlandlord11.vercel.app/frontend/index.html  
+
 ChainLandlord 是一款基于Solana区块链的去中心化斗地主游戏，利用Solana交易处理速度快的特点，支持了游戏全过程上链，避免了游戏被中心化的庄家操纵，且可历史游戏记录可查。拥有完整的斗地主规则，包括单张、对子、三张、三带一、三带二、顺子、炸弹和火箭等牌型。该游戏创新性地支持临时钱包代理操作，让玩家可以使用临时钱包进行游戏操作，而不用频繁签署交易，而收益会自动归集到主钱包，提供安全便捷的游戏体验。
 
 ## 主要功能
