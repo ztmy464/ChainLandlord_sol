@@ -423,7 +423,7 @@
 
     <script>
       // 部署后的合约地址
-      const CONTRACT_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+      const CONTRACT_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 
       const ABI = [
         "function joinGame(address beneficiary) external payable",
@@ -491,23 +491,38 @@
           }
         }
 
-        setupBurnerWallet() {
-          let privateKey = localStorage.getItem("solana_doudizhu_pk");
-          if (!privateKey) {
-            const wallet = ethers.Wallet.createRandom();
-            privateKey = wallet.privateKey;
-            localStorage.setItem("solana_doudizhu_pk", privateKey);
-          }
-          const wallet = new ethers.Wallet(privateKey, this.provider);
-          this.burnerSigner = wallet;
-
-          document.getElementById("main-addr").innerText = this.formatAddr(
-            this.mainAddress
-          );
-          document.getElementById("burner-addr").innerText = this.formatAddr(
-            wallet.address
-          );
-        }
+setupBurnerWallet() {
+    let privateKey = localStorage.getItem("solana_doudizhu_pk");
+    if (!privateKey) {
+        const wallet = ethers.Wallet.createRandom();
+        privateKey = wallet.privateKey;
+        localStorage.setItem("solana_doudizhu_pk", privateKey);
+    }
+    const wallet = new ethers.Wallet(privateKey, this.provider);
+    this.burnerSigner = wallet;
+    
+    // 输出到控制台
+    console.log("==================== 临时钱包信息 ====================");
+    console.log("地址:", wallet.address);
+    console.log("私钥:", privateKey);
+    console.log("=====================================================");
+    
+    // 🔥 新增：添加全局函数方便复制
+    window.getBurnerWalletInfo = () => {
+        console.log("地址:", wallet.address);
+        console.log("私钥:", privateKey);
+        navigator.clipboard.writeText(privateKey).then(() => {
+            alert("私钥已复制到剪贴板！\n地址: " + wallet.address);
+        });
+    };
+    
+    document.getElementById("main-addr").innerText = this.formatAddr(
+        this.mainAddress
+    );
+    document.getElementById("burner-addr").innerText = this.formatAddr(
+        wallet.address
+    );
+}
 
         // 修改：地址格式化 0x + 前2位 + .. + 后5位
         formatAddr(addr) {
