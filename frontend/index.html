@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>solana 极速斗地主</title>
+    <!-- 引入 Ethers.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js"></script>
+    <style>
+      :root {
+        --table-color: #2e7d32;
+        --card-width: 80px;
+        --card-height: 110px;
+        --primary-btn: #ffc107;
+        --disabled-btn: #bdbdbd;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #1b1b1b;
+        margin: 0;
+        height: 100vh;
+        overflow: hidden;
+        color: white;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* --- 顶部栏 --- */
+      #header {
+        padding: 10px 20px;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: 100;
+      }
+
+      #status-bar {
+        font-size: 14px;
+        color: #ccc;
+      }
+
+      .wallet-status {
+        font-size: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+      }
+      .wallet-row {
+        margin-bottom: 2px;
+      }
+
+      /* --- 游戏桌面 --- */
+      #game-table {
+        flex: 1;
+        background: radial-gradient(circle, #43a047 0%, #1b5e20 100%);
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      #center-info {
+        position: absolute;
+        top: 15%;
+        text-align: center;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 10px 30px;
+        border-radius: 10px;
+      }
+
+      .hole-cards {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin-bottom: 10px;
+      }
+
+      /* --- 玩家区域 --- */
+      .player-area {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transition: all 0.3s;
+      }
+
+      #player-left {
+        left: 20px;
+        top: 40%;
+      }
+      #player-right {
+        right: 20px;
+        top: 40%;
+      }
+      #player-me {
+        bottom: 20px;
+        width: 100%;
+        height: 220px;
+        justify-content: flex-end;
+      }
+
+      .avatar {
+        width: 50px;
+        height: 50px;
+        background: #eee;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        margin-bottom: 2px; /* 减小间距 */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #333;
+        font-weight: bold;
+        position: relative;
+      }
+
+      .landlord-icon::after {
+        content: "👑";
+        position: absolute;
+        top: -15px;
+        right: -10px;
+        font-size: 24px;
+      }
+
+      /* 新增：玩家名称样式 */
+      .player-name {
+        font-size: 11px;
+        color: #ddd;
+        font-family: monospace; /* 等宽字体方便对齐 */
+        background: rgba(0, 0, 0, 0.4);
+        padding: 2px 4px;
+        border-radius: 4px;
+        margin-bottom: 4px;
+      }
+
+      .role-tag {
+        font-size: 12px;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+
+      /* 出牌展示区 */
+      .last-move {
+        height: 90px;
+        display: flex;
+        justify-content: center;
+        position: absolute;
+        pointer-events: none;
+        z-index: 20;
+      }
+
+      #player-left .last-move {
+        left: 80px;
+        top: 0;
+        transform: scale(0.8);
+        transform-origin: left center;
+      }
+      #player-right .last-move {
+        right: 80px;
+        top: 0;
+        transform: scale(0.8);
+        transform-origin: right center;
+        /* 核心修改： */
+        flex-direction: row; /* 改回正常顺序 */
+        justify-content: flex-end; /* 让整组牌靠右对齐（贴近头像） */
+        width: 400px; /* 给一个宽度空间向左延伸 */
+      }
+      #player-me .last-move {
+        bottom: 380px;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      .played-card {
+        width: 50px;
+        height: 70px;
+        margin-left: -20px;
+        box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.4);
+        border-radius: 4px;
+        background: white;
+        display: flex;
+        flex-direction: column;
+        padding: 2px;
+        font-size: 14px;
+        box-sizing: border-box;
+        color: black;
+        font-weight: bold;
+        line-height: 1;
+      }
+      .played-card:first-child {
+        margin-left: 0;
+      }
+      .played-card.red {
+        color: #d32f2f;
+      }
+
+      /* --- 手牌样式 --- */
+      .card {
+        width: var(--card-width);
+        height: var(--card-height);
+        background: white;
+        border-radius: 6px;
+        box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.3);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 5px;
+        box-sizing: border-box;
+        font-weight: bold;
+        font-size: 18px;
+        user-select: none;
+        position: relative;
+      }
+
+      .card.red {
+        color: #d32f2f;
+      }
+      .card.black {
+        color: #212121;
+      }
+      .card-sm {
+        width: 40px;
+        height: 56px;
+        font-size: 12px;
+      }
+      .card-back {
+        background: repeating-linear-gradient(
+          45deg,
+          #606dbc,
+          #606dbc 10px,
+          #465298 10px,
+          #465298 20px
+        );
+        border: 2px solid white;
+      }
+
+      #my-hand {
+        display: flex;
+        justify-content: center;
+        margin-left: 40px;
+        margin-bottom: 20px;
+      }
+
+      #my-hand .card {
+        margin-left: -45px;
+        cursor: pointer;
+        transition: transform 0.2s;
+        box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+      }
+      #my-hand .card:hover {
+        transform: translateY(-15px);
+      }
+      #my-hand .card.selected {
+        transform: translateY(-25px);
+        border: 2px solid #ffeb3b;
+      }
+
+      /* --- 按钮 --- */
+      #controls {
+        position: absolute;
+        bottom: 240px;
+        display: flex;
+        gap: 15px;
+        z-index: 50;
+        width: 100%;
+        justify-content: center;
+      }
+
+      .game-btn {
+        padding: 10px 25px;
+        border: none;
+        border-radius: 20px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        background: var(--primary-btn);
+        color: #333;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        transition: transform 0.1s;
+      }
+      .game-btn:active {
+        transform: scale(0.95);
+      }
+      .game-btn:disabled {
+        background: var(--disabled-btn);
+        color: #666;
+        cursor: not-allowed;
+      }
+      .game-btn.blue {
+        background: #2196f3;
+        color: white;
+      }
+      .game-btn.green {
+        background: #4caf50;
+        color: white;
+      }
+
+      #overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 200;
+      }
+      .modal {
+        background: white;
+        color: #333;
+        padding: 30px;
+        border-radius: 10px;
+        text-align: center;
+        max-width: 400px;
+      }
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="header">
+      <div id="logo">solana ChainLandlord ♠️</div>
+      <div class="wallet-status">
+        <div class="wallet-row">
+          主钱包: <span id="main-addr">未连接</span> <span id="main-bal"></span>
+        </div>
+        <div class="wallet-row" style="color: #aaa; font-size: 11px">
+          游戏钱包 (免签): <span id="burner-addr">生成中...</span>
+          <span id="burner-bal"></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="game-table">
+      <div id="center-info">
+        <div
+          id="message-text"
+          style="margin-bottom: 10px; color: #ffeb3b; font-weight: bold"
+        >
+          等待加入...
+        </div>
+        <div class="hole-cards" id="hole-cards-area">
+          <div class="card card-sm card-back"></div>
+          <div class="card card-sm card-back"></div>
+          <div class="card card-sm card-back"></div>
+        </div>
+        <div style="font-size: 12px; margin-top: 5px">奖池: 0.03 SOL</div>
+      </div>
+
+      <div class="player-area" id="player-left">
+        <div class="avatar" id="avatar-left">👤</div>
+        <div class="player-name" id="name-left">--</div>
+        <!-- 新增：名字 -->
+        <div class="role-tag" id="role-left"></div>
+        <div style="margin-top: 5px">剩余: <span id="count-left">0</span></div>
+        <div class="last-move" id="move-left"></div>
+      </div>
+
+      <div class="player-area" id="player-right">
+        <div class="avatar" id="avatar-right">👤</div>
+        <div class="player-name" id="name-right">--</div>
+        <!-- 新增：名字 -->
+        <div class="role-tag" id="role-right"></div>
+        <div style="margin-top: 5px">剩余: <span id="count-right">0</span></div>
+        <div class="last-move" id="move-right"></div>
+      </div>
+
+      <div class="player-area" id="player-me">
+        <div class="last-move" id="move-me"></div>
+
+        <div id="controls" class="hidden">
+          <button id="btn-join" class="game-btn green">
+            加入游戏 (充值 0.01 SOL)
+          </button>
+
+          <div id="bid-controls" class="hidden">
+            <button class="game-btn" onclick="game.bid(0)">不叫</button>
+            <button class="game-btn" onclick="game.bid(1)">1分</button>
+            <button class="game-btn" onclick="game.bid(2)">2分</button>
+            <button class="game-btn" onclick="game.bid(3)">3分</button>
+          </div>
+
+          <div id="play-controls" class="hidden">
+            <button id="btn-pass" class="game-btn" onclick="game.pass()">
+              不出
+            </button>
+            <button class="game-btn blue" onclick="game.play()">出牌</button>
+          </div>
+        </div>
+
+        <div id="my-hand"></div>
+
+        <div style="margin-top: 10px">
+          <div class="avatar" id="avatar-me" style="display: inline-flex">
+            我
+          </div>
+          <!-- 自己的名字不需要显示太复杂，或者也可以显示地址 -->
+          <span class="role-tag" id="role-me"></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay">
+      <div class="modal">
+        <h2>solana 极速斗地主</h2>
+        <p>免签名版：使用临时钱包实现丝滑体验</p>
+        <p style="font-size: 12px; color: #666">资金自动结算回主钱包</p>
+        <button
+          id="btn-connect"
+          class="game-btn blue"
+          style="width: 100%; margin-top: 20px"
+        >
+          连接 MetaMask
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // 部署后的合约地址
+      const CONTRACT_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+
+      const ABI = [
+        "function joinGame(address beneficiary) external payable",
+        "function bid(uint8 score) external",
+        "function playHand(uint8[] calldata cards) external",
+        // 🔥 修改这里：添加两个返回值
+        "function getTableInfo(uint256 tid) external view returns (uint8 state, address[3] playerAddrs, uint8 currentTurn, uint8 landlordIndex, uint8[] lastCards, uint8[3] holeCards, uint8 lastHandPlayerIndex, uint8 baseMultiplier, uint16 bombMultiplier)",
+        "function getMyHand() external view returns (uint8[])",
+        "function getPlayerTableId(address) external view returns (uint256)",
+      ];
+
+      class DoudizhuGame {
+        constructor() {
+          this.provider = null;
+          this.mainSigner = null;
+          this.mainAddress = null;
+          this.burnerSigner = null;
+          this.contractMain = null;
+          this.contractBurner = null;
+
+          this.tableId = 0;
+          this.state = 0;
+          this.mySeatIndex = -1;
+          this.handCards = [];
+          this.selectedCards = new Set();
+          this.timer = null;
+          this.lastPlayedCardsCache = "";
+          this.lastHandCards = [];
+          this.lastHandPlayerIndex = -1;
+          this.landlordIndex = -1;
+
+          // 游戏结算相关
+          this.baseMultiplier = 1; // 叫分决定的基础倍数
+          this.bombMultiplier = 1; // 炸弹倍数（每次炸弹x2）
+          this.entryAmount = ethers.parseEther("0.01"); // 每人入场费
+          this.isGameEnded = false;
+        }
+
+        async init() {
+          if (!window.ethereum) return alert("请安装 MetaMask");
+          try {
+            this.provider = new ethers.BrowserProvider(window.ethereum);
+            this.mainSigner = await this.provider.getSigner();
+            this.mainAddress = await this.mainSigner.getAddress();
+
+            this.setupBurnerWallet();
+
+            this.contractMain = new ethers.Contract(
+              CONTRACT_ADDRESS,
+              ABI,
+              this.mainSigner
+            );
+            this.contractBurner = new ethers.Contract(
+              CONTRACT_ADDRESS,
+              ABI,
+              this.burnerSigner
+            );
+
+            document.getElementById("overlay").classList.add("hidden");
+            this.updateBalanceDisplay();
+            await this.checkCurrentStatus();
+          } catch (err) {
+            console.error("Init Error:", err);
+            alert("初始化失败: " + err.message);
+          }
+        }
+
+        setupBurnerWallet() {
+          let privateKey = localStorage.getItem("solana_doudizhu_pk");
+          if (!privateKey) {
+            const wallet = ethers.Wallet.createRandom();
+            privateKey = wallet.privateKey;
+            localStorage.setItem("solana_doudizhu_pk", privateKey);
+          }
+          const wallet = new ethers.Wallet(privateKey, this.provider);
+          this.burnerSigner = wallet;
+
+          document.getElementById("main-addr").innerText = this.formatAddr(
+            this.mainAddress
+          );
+          document.getElementById("burner-addr").innerText = this.formatAddr(
+            wallet.address
+          );
+        }
+
+        // 修改：地址格式化 0x + 前2位 + .. + 后5位
+        formatAddr(addr) {
+          if (!addr) return "";
+          return addr.substring(0, 4) + ".." + addr.substring(addr.length - 5);
+        }
+
+        async updateBalanceDisplay() {
+          try {
+            const mb = await this.provider.getBalance(this.mainAddress);
+            const bb = await this.provider.getBalance(
+              this.burnerSigner.address
+            );
+            document.getElementById("main-bal").innerText = `💰 ${parseFloat(
+              ethers.formatEther(mb)
+            ).toFixed(3)}`;
+            document.getElementById("burner-bal").innerText = `💰 ${parseFloat(
+              ethers.formatEther(bb)
+            ).toFixed(3)}`;
+          } catch (e) {}
+        }
+
+        async checkCurrentStatus() {
+          try {
+            const tid = Number(
+              await this.contractMain.getPlayerTableId(
+                this.burnerSigner.address
+              )
+            );
+            if (tid > 0) {
+              this.tableId = tid;
+              this.startPolling();
+            } else {
+              this.showControls("join");
+              document.getElementById("message-text").innerText =
+                "请充值加入游戏";
+            }
+          } catch (e) {
+            console.error(e);
+            this.showControls("join");
+          }
+        }
+
+        async join() {
+          const ENTRY = ethers.parseEther("0.01");
+
+          try {
+            const burnerBal = await this.provider.getBalance(
+              this.burnerSigner.address
+            );
+
+            if (burnerBal < ENTRY) {
+              const needed = ENTRY;
+              if (
+                confirm(
+                  `需向临时钱包充值 ${ethers.formatEther(needed)} SOL，确认吗？`
+                )
+              ) {
+                this.showToast("正在充值临时钱包...");
+                const tx = await this.mainSigner.sendTransaction({
+                  to: this.burnerSigner.address,
+                  value: needed,
+                });
+                await tx.wait();
+                this.showToast("充值成功！正在加入...");
+                await this.updateBalanceDisplay();
+              } else {
+                return;
+              }
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            const tx = await this.contractBurner.joinGame(this.mainAddress, {
+              value: 0,
+            });
+            document.getElementById("btn-join").innerText = "匹配中...";
+            document.getElementById("btn-join").disabled = true;
+            await tx.wait();
+            this.showToast("加入成功！");
+            await this.checkCurrentStatus();
+          } catch (e) {
+            console.error(e);
+            alert("加入失败: " + (e.reason || e.message));
+            document.getElementById("btn-join").disabled = false;
+            document.getElementById("btn-join").innerText = "加入游戏";
+          }
+        }
+
+        startPolling() {
+          if (this.timer) clearInterval(this.timer);
+          this.updateTable();
+          this.timer = setInterval(() => this.updateTable(), 2000);
+        }
+
+        async updateTable() {
+          try {
+            // 获取手牌
+            const handData = await this.contractBurner.getMyHand();
+            const newHand = Array.from(handData).map((n) => Number(n));
+
+            const isHandChanged =
+              newHand.length !== this.handCards.length ||
+              !newHand.every((val) => this.handCards.includes(val));
+
+            if (isHandChanged || this.handCards.length === 0) {
+              this.handCards = newHand;
+              this.handCards.sort((a, b) => {
+                const wa = this.getCardWeight(a);
+                const wb = this.getCardWeight(b);
+                if (wa !== wb) return wb - wa;
+                return b - a;
+              });
+              this.renderHand();
+            }
+
+            // 获取桌面信息
+            const info = await this.contractMain.getTableInfo(this.tableId);
+            const state = Number(info[0]);
+            const playerAddrs = info[1];
+            const currentTurn = Number(info[2]);
+            const landlordIndex = Number(info[3]);
+            const lastCards = Array.from(info[4]).map((n) => Number(n));
+            const holeCards = Array.from(info[5]).map((n) => Number(n));
+            const lastHandPlayerIndex = Number(info[6]);
+
+            // 🔥 新增：从合约获取倍数
+            const baseMultiplier = Number(info[7]);
+            const bombMultiplier = Number(info[8]);
+
+            // 🔥 更新本地倍数（从合约同步）
+            this.baseMultiplier = baseMultiplier;
+            this.bombMultiplier = bombMultiplier;
+
+            // 🔥 删除前端的炸弹检测逻辑（不再需要）
+            // if (lastCards.length > 0 && ...) { ... }
+
+            this.lastHandCards = lastCards;
+            this.lastHandPlayerIndex = lastHandPlayerIndex;
+            this.landlordIndex = landlordIndex;
+            this.state = state;
+            this.mySeatIndex = playerAddrs.findIndex(
+              (addr) =>
+                addr.toLowerCase() === this.burnerSigner.address.toLowerCase()
+            );
+
+            // 游戏结束处理
+            if (state === 3 && !this.isGameEnded) {
+              this.isGameEnded = true;
+              clearInterval(this.timer);
+              await this.handleGameEnd(playerAddrs, landlordIndex);
+              return;
+            }
+
+            if (this.mySeatIndex === -1) {
+              clearInterval(this.timer);
+              this.tableId = 0;
+              this.handCards = [];
+              this.renderHand();
+              this.showControls("join");
+              alert("游戏结束，奖金已自动结算到主钱包！");
+              this.updateBalanceDisplay();
+              return;
+            }
+
+            this.updateStatusText(state, currentTurn, lastHandPlayerIndex);
+            this.renderHoleCards(holeCards, state >= 2);
+            this.renderPlayers(playerAddrs, landlordIndex, currentTurn);
+            this.renderTableCards(lastCards, lastHandPlayerIndex);
+            this.updateControls(state, currentTurn);
+          } catch (e) {
+            console.error("Polling error", e);
+          }
+        }
+        // 规则逻辑
+        get HandType() {
+          return {
+            INVALID: 0,
+            ROCKET: 1,
+            BOMB: 2,
+            SINGLE: 3,
+            PAIR: 4,
+            TRIPLE: 5,
+            TRIPLE_ONE: 6,
+            TRIPLE_TWO: 7,
+            STRAIGHT: 8,
+          };
+        }
+
+        getLogicWeight(id) {
+          if (id === 52) return 13;
+          if (id === 53) return 14;
+          return id % 13;
+        }
+
+        analyzeHand(cards) {
+          const len = cards.length;
+          if (len === 0) return { type: this.HandType.INVALID, weight: 0 };
+          const weights = cards
+            .map((id) => this.getLogicWeight(id))
+            .sort((a, b) => a - b);
+
+          const counts = {};
+          let maxCount = 0;
+          let maxWeight = 0;
+
+          weights.forEach((w) => {
+            counts[w] = (counts[w] || 0) + 1;
+            if (counts[w] > maxCount) {
+              maxCount = counts[w];
+              maxWeight = w;
+            } else if (counts[w] === maxCount) {
+              if (w > maxWeight) maxWeight = w;
+            }
+          });
+
+          if (len === 2 && cards.includes(52) && cards.includes(53))
+            return { type: this.HandType.ROCKET, weight: 100, len };
+          if (len === 4 && maxCount === 4)
+            return { type: this.HandType.BOMB, weight: maxWeight, len };
+          if (len === 1)
+            return { type: this.HandType.SINGLE, weight: weights[0], len };
+          if (len === 2 && maxCount === 2)
+            return { type: this.HandType.PAIR, weight: weights[0], len };
+          if (len === 3 && maxCount === 3)
+            return { type: this.HandType.TRIPLE, weight: weights[0], len };
+          if (len === 4 && maxCount === 3)
+            return { type: this.HandType.TRIPLE_ONE, weight: maxWeight, len };
+          if (len === 5 && maxCount === 3) {
+            const keys = Object.keys(counts);
+            if (
+              keys.length === 2 &&
+              (counts[keys[0]] === 2 || counts[keys[1]] === 2)
+            )
+              return { type: this.HandType.TRIPLE_TWO, weight: maxWeight, len };
+          }
+          if (len >= 5 && maxCount === 1) {
+            if (weights[len - 1] >= 12)
+              return { type: this.HandType.INVALID, weight: 0 };
+            for (let i = 0; i < len - 1; i++) {
+              if (weights[i + 1] !== weights[i] + 1)
+                return { type: this.HandType.INVALID, weight: 0 };
+            }
+            return { type: this.HandType.STRAIGHT, weight: weights[0], len };
+          }
+          return { type: this.HandType.INVALID, weight: 0 };
+        }
+
+        canBeat(myCards, lastCards) {
+          const myHand = this.analyzeHand(myCards);
+          const lastHand = this.analyzeHand(lastCards);
+
+          if (myHand.type === this.HandType.INVALID)
+            return { valid: false, msg: "牌型不合法" };
+          if (myHand.type === this.HandType.ROCKET) return { valid: true };
+          if (lastHand.type === this.HandType.ROCKET)
+            return { valid: false, msg: "管不住王炸" };
+          if (myHand.type === this.HandType.BOMB) {
+            if (lastHand.type !== this.HandType.BOMB) return { valid: true };
+            return myHand.weight > lastHand.weight
+              ? { valid: true }
+              : { valid: false, msg: "炸弹太小" };
+          }
+          if (lastHand.type === this.HandType.BOMB)
+            return { valid: false, msg: "管不住炸弹" };
+          if (myHand.type !== lastHand.type)
+            return { valid: false, msg: "牌型不匹配" };
+          if (myHand.len !== lastHand.len)
+            return { valid: false, msg: "张数不匹配" };
+          if (myHand.weight > lastHand.weight) return { valid: true };
+
+          return { valid: false, msg: "牌太小了" };
+        }
+
+        async bid(score) {
+          try {
+            this.showToast("正在提交叫分...");
+            const tx = await this.contractBurner.bid(score);
+            await tx.wait();
+
+            // 🔥 立即更新桌面状态
+            await this.updateTable();
+
+            // 🔥 删除这段（从合约同步）
+            // if (score > 0) {
+            //     this.baseMultiplier = score;
+            // }
+
+            if (score === 3) {
+              this.showToast("🎉 叫3分！你成为地主！");
+            }
+          } catch (e) {
+            console.error(e);
+            this.showToast("失败: " + e.message);
+          }
+        }
+
+        async pass() {
+          try {
+            const tx = await this.contractBurner.playHand([]);
+            await tx.wait();
+          } catch (e) {
+            console.error(e);
+            this.showToast("失败: " + e.message);
+          }
+        }
+
+        async play() {
+          const cards = Array.from(this.selectedCards);
+          if (cards.length === 0) return alert("请选择牌");
+
+          // --- 核心逻辑修复 ---
+          // 判断是否有自由出牌权：
+          // 1. 桌面没有牌（游戏刚开始或刚结算完底牌）
+          // 2. 我是上一轮的赢家（其他两家都Pass了，lastHandPlayerIndex指向我）
+          //    注意：这里的关键是理解合约的逻辑
+          //    - 当轮到我出牌时(currentTurn === mySeatIndex)
+          //    - 如果lastHandPlayerIndex === mySeatIndex，说明上一轮是我赢的
+
+          const hasFreedom =
+            this.lastHandCards.length === 0 ||
+            this.lastHandPlayerIndex === this.mySeatIndex;
+
+          if (hasFreedom) {
+            // 自由出牌：只要牌型合法即可
+            const analysis = this.analyzeHand(cards);
+            if (analysis.type === this.HandType.INVALID) {
+              return alert("出牌不合法：牌型错误");
+            }
+          } else {
+            // 必须管上家的牌
+            const check = this.canBeat(cards, this.lastHandCards);
+            if (!check.valid) {
+              return alert("出牌无效：" + check.msg);
+            }
+          }
+
+          try {
+            this.handCards = this.handCards.filter((c) => !cards.includes(c));
+            this.renderHand();
+            const tx = await this.contractBurner.playHand(cards);
+            await tx.wait();
+            this.selectedCards.clear();
+          } catch (e) {
+            console.error(e);
+            alert("上链失败: " + (e.reason || "未知错误"));
+            this.updateTable();
+          }
+        }
+
+        renderTableCards(cards, playerIdx) {
+          const uniqueKey = cards.join(",") + "-" + playerIdx;
+          if (this.lastPlayedCardsCache === uniqueKey) return;
+          this.lastPlayedCardsCache = uniqueKey;
+
+          document.getElementById("move-me").innerHTML = "";
+          document.getElementById("move-left").innerHTML = "";
+          document.getElementById("move-right").innerHTML = "";
+
+          if (cards.length === 0) return;
+
+          let pos = "";
+          if (playerIdx === this.mySeatIndex) pos = "me";
+          else if (playerIdx === (this.mySeatIndex + 1) % 3) pos = "right";
+          else pos = "left";
+
+          const container = document.getElementById(`move-${pos}`);
+          cards.forEach((id) => {
+            const el = this.createCardEl(id, "sm");
+            el.classList.remove("card-sm");
+            el.classList.add("played-card");
+            container.appendChild(el);
+          });
+        }
+
+        showControls(type) {
+          const controls = document.getElementById("controls");
+          controls.classList.remove("hidden");
+          document.getElementById("btn-join").classList.add("hidden");
+          document.getElementById("bid-controls").classList.add("hidden");
+          document.getElementById("play-controls").classList.add("hidden");
+
+          if (type === "join")
+            document.getElementById("btn-join").classList.remove("hidden");
+          else if (type === "bid") {
+            document.getElementById("bid-controls").classList.remove("hidden");
+            document.getElementById("btn-join").classList.add("hidden");
+          } else if (type === "play") {
+            document.getElementById("btn-join").classList.add("hidden");
+            document.getElementById("play-controls").classList.remove("hidden");
+          }
+        }
+
+        updateControls(state, turn) {
+          if (turn === this.mySeatIndex) {
+            if (state === 1) this.showControls("bid");
+            else if (state === 2) {
+              this.showControls("play");
+              // 逻辑修复：如果是新的一轮（我是领头），则必须出牌，不能Pass
+              const isLeader =
+                this.lastHandPlayerIndex === this.mySeatIndex ||
+                this.lastHandCards.length === 0;
+              const btnPass = document.getElementById("btn-pass");
+              if (isLeader) {
+                btnPass.disabled = true;
+                btnPass.innerText = "必须出牌";
+              } else {
+                btnPass.disabled = false;
+                btnPass.innerText = "不出";
+              }
+            }
+          } else {
+            document.getElementById("bid-controls").classList.add("hidden");
+            document.getElementById("play-controls").classList.add("hidden");
+          }
+        }
+
+        updateStatusText(state, turn, lastHandIdx) {
+          // 🔥 修改这里：根据state显示不同文本
+          let msg = "";
+
+          if (state === 0) {
+            msg = "等待开始";
+          } else if (state === 1) {
+            msg = "叫分阶段";
+          } else if (state === 2) {
+            msg = "游戏中";
+          } else if (state === 3) {
+            msg = "游戏结束";
+          }
+
+          // 显示当前倍数
+          if (state >= 1) {
+            const totalMult = this.baseMultiplier * this.bombMultiplier;
+            if (totalMult > 1) {
+              msg += ` [${totalMult}倍]`;
+            }
+          }
+
+          // 增加状态提示：是谁的回合
+          if (state > 0 && state < 3) {
+            // 🔥 加上 state < 3 的判断
+            if (turn === this.mySeatIndex) {
+              if (state === 2 && lastHandIdx === this.mySeatIndex) {
+                msg += " (你的回合 - 自由出牌)";
+              } else {
+                msg += " (轮到你了)";
+              }
+            } else {
+              const rightIdx = (this.mySeatIndex + 1) % 3;
+              const leftIdx = (this.mySeatIndex + 2) % 3;
+              if (turn === rightIdx) msg += " (右边思考中...)";
+              else if (turn === leftIdx) msg += " (左边思考中...)";
+            }
+          }
+
+          document.getElementById("message-text").innerText = msg;
+          // 🔥 单独更新倍数显示
+          const totalMult = this.baseMultiplier * this.bombMultiplier;
+          const multiplierEl = document.getElementById("multiplier-display");
+          if (multiplierEl) {
+            multiplierEl.innerText = `${totalMult}×`;
+            if (totalMult > 1) {
+              multiplierEl.style.color = "#ff5722";
+              multiplierEl.style.fontSize = "22px";
+            } else {
+              multiplierEl.style.color = "#ffeb3b";
+              multiplierEl.style.fontSize = "18px";
+            }
+          }
+        }
+
+        renderHoleCards(cards, reveal) {
+          const container = document.getElementById("hole-cards-area");
+          container.innerHTML = "";
+          cards.forEach((id) => {
+            if (reveal) container.appendChild(this.createCardEl(id, "sm"));
+            else {
+              const div = document.createElement("div");
+              div.className = "card card-sm card-back";
+              container.appendChild(div);
+            }
+          });
+        }
+
+        renderHand() {
+          const container = document.getElementById("my-hand");
+          container.innerHTML = "";
+          this.handCards.forEach((id) => {
+            const el = this.createCardEl(id);
+            if (this.selectedCards.has(id)) el.classList.add("selected");
+            el.onclick = () => this.toggleCard(id);
+            container.appendChild(el);
+          });
+        }
+
+        toggleCard(id) {
+          if (this.selectedCards.has(id)) this.selectedCards.delete(id);
+          else this.selectedCards.add(id);
+          this.renderHand();
+        }
+
+        renderPlayers(addrs, landlordIdx, turn) {
+          const rightIdx = (this.mySeatIndex + 1) % 3;
+          const leftIdx = (this.mySeatIndex + 2) % 3;
+
+          // 传入具体的地址字符串
+          this.updatePlayerUI(
+            "me",
+            this.mySeatIndex,
+            landlordIdx,
+            turn,
+            addrs[this.mySeatIndex]
+          );
+          this.updatePlayerUI(
+            "right",
+            rightIdx,
+            landlordIdx,
+            turn,
+            addrs[rightIdx]
+          );
+          this.updatePlayerUI(
+            "left",
+            leftIdx,
+            landlordIdx,
+            turn,
+            addrs[leftIdx]
+          );
+        }
+
+        updatePlayerUI(pos, idx, landlordIdx, turn, address) {
+          const isLandlord = idx === landlordIdx && this.state >= 2;
+          const isTurn = idx === turn;
+          const avatar = document.getElementById(`avatar-${pos}`);
+          const role = document.getElementById(`role-${pos}`);
+          const nameLabel = document.getElementById(
+            pos === "me" ? "role-me" : `name-${pos}`
+          ); // 自己的名字不用专门的标签，用role区域附近即可
+
+          if (isLandlord) avatar.classList.add("landlord-icon");
+          else avatar.classList.remove("landlord-icon");
+
+          if (isTurn) avatar.style.border = "3px solid #ffeb3b";
+          else avatar.style.border = "2px solid #fff";
+
+          const roleText = isLandlord ? "地主" : "农民";
+
+          if (pos === "me") {
+            role.innerText = roleText;
+          } else {
+            role.innerText = roleText;
+            if (address) nameLabel.innerText = this.formatAddr(address);
+          }
+        }
+
+        createCardEl(id, size = "lg") {
+          const div = document.createElement("div");
+          div.className = `card ${size === "sm" ? "card-sm" : ""}`;
+          const val = this.getCardValue(id);
+          const suit = this.getCardSuit(id);
+          const isRed =
+            (id >= 0 && id <= 12) || (id >= 26 && id <= 38) || id === 53;
+          div.classList.add(isRed ? "red" : "black");
+          div.innerHTML = `<div style="text-align:left">${val}</div><div style="text-align:center; font-size:${
+            size === "sm" ? "14px" : "24px"
+          }">${suit}</div><div style="text-align:right; transform:rotate(180deg)">${val}</div>`;
+          return div;
+        }
+
+        getCardValue(id) {
+          if (id === 52) return "S";
+          if (id === 53) return "B";
+          return [
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "J",
+            "Q",
+            "K",
+            "A",
+            "2",
+          ][id % 13];
+        }
+        getCardSuit(id) {
+          if (id >= 52) return "🤡";
+          return ["♦", "♣", "♥", "♠"][Math.floor(id / 13)];
+        }
+        getCardWeight(id) {
+          if (id === 52) return 100;
+          if (id === 53) return 101;
+          return id % 13;
+        }
+        // === 游戏结算逻辑 ===
+        async handleGameEnd(playerAddrs, landlordIndex) {
+          try {
+            this.showToast("游戏结束，正在结算...");
+
+            // 判断赢家（手牌为0的人）
+            let winnerIndex = -1;
+            if (this.handCards.length === 0) {
+              winnerIndex = this.mySeatIndex;
+            }
+
+            // 如果无法判断赢家，默认等待3秒后结算
+            if (winnerIndex === -1) {
+              await new Promise((r) => setTimeout(r, 3000));
+            }
+
+            await this.distributeWinnings(
+              winnerIndex,
+              landlordIndex,
+              playerAddrs
+            );
+          } catch (e) {
+            console.error("结算失败:", e);
+            this.showToast("结算失败，请手动提取余额");
+            await this.returnBurnerFunds();
+          }
+        }
+
+        // 分配奖金
+        async distributeWinnings(winnerIndex, landlordIndex, playerAddrs) {
+          const isLandlordWin = winnerIndex === landlordIndex;
+          const totalMultiplier = this.baseMultiplier * this.bombMultiplier;
+
+          // 计算输赢金额（单个农民的输赢）
+          let singleAmount = this.entryAmount * BigInt(totalMultiplier);
+
+          // 确保不超过本金
+          if (singleAmount > this.entryAmount) {
+            singleAmount = this.entryAmount;
+          }
+
+          this.showToast(
+            `结算倍数: ${this.baseMultiplier} x ${this.bombMultiplier} = ${totalMultiplier}倍`
+          );
+
+          if (isLandlordWin) {
+            // 地主赢：地主获得 2 * singleAmount
+            if (winnerIndex === this.mySeatIndex) {
+              const winAmount = singleAmount * 2n;
+              this.showToast(
+                `🎉 地主胜利！赢得 ${ethers.formatEther(winAmount)} SOL`
+              );
+            } else {
+              this.showToast(
+                `😢 地主获胜，你输了 ${ethers.formatEther(singleAmount)} SOL`
+              );
+            }
+          } else {
+            // 农民赢：每个农民获得 singleAmount
+            if (winnerIndex === this.mySeatIndex) {
+              this.showToast(
+                `🎉 农民胜利！赢得 ${ethers.formatEther(singleAmount)} SOL`
+              );
+            } else if (this.mySeatIndex === landlordIndex) {
+              const loseAmount = singleAmount * 2n;
+              this.showToast(
+                `😢 农民获胜，你输了 ${ethers.formatEther(loseAmount)} SOL`
+              );
+            } else {
+              this.showToast(
+                `🎉 队友获胜！赢得 ${ethers.formatEther(singleAmount)} SOL`
+              );
+            }
+          }
+
+          // 等待2秒展示结果
+          await new Promise((r) => setTimeout(r, 2000));
+
+          // 将临时钱包余额全部转回主钱包
+          await this.returnBurnerFunds();
+        }
+
+        // 将临时钱包余额转回主钱包
+        async returnBurnerFunds() {
+          try {
+            const balance = await this.provider.getBalance(
+              this.burnerSigner.address
+            );
+
+            if (balance === 0n) {
+              this.showToast("临时钱包已清空");
+              this.resetGame();
+              return;
+            }
+
+            // 预估gas费用
+            const gasPrice = (await this.provider.getFeeData()).gasPrice;
+            const gasLimit = 21000n;
+            const gasCost = gasPrice * gasLimit;
+
+            if (balance <= gasCost) {
+              this.showToast("余额不足支付gas费");
+              this.resetGame();
+              return;
+            }
+
+            const transferAmount = balance - gasCost;
+
+            this.showToast(
+              `正在转回 ${ethers.formatEther(transferAmount)} SOL...`
+            );
+
+            const tx = await this.burnerSigner.sendTransaction({
+              to: this.mainAddress,
+              value: transferAmount,
+              gasLimit: gasLimit,
+              gasPrice: gasPrice,
+            });
+
+            await tx.wait();
+
+            this.showToast("✅ 资金已转回主钱包！");
+            await this.updateBalanceDisplay();
+
+            this.resetGame();
+          } catch (e) {
+            console.error("转账失败:", e);
+            this.showToast("转账失败: " + e.message);
+            this.resetGame();
+          }
+        }
+
+        // 重置游戏状态
+        resetGame() {
+          this.tableId = 0;
+          this.handCards = [];
+          this.selectedCards.clear();
+          this.baseMultiplier = 1;
+          this.bombMultiplier = 1;
+          this.isGameEnded = false;
+          this.renderHand();
+          this.showControls("join");
+          document.getElementById("btn-join").innerText =
+            "加入游戏 (充值 0.01 SOL)";
+          document.getElementById("btn-join").disabled = false;
+        }
+        showToast(msg) {
+          const div = document.createElement("div");
+          div.style.cssText =
+            "position:fixed; top:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); padding:10px 20px; border-radius:5px; z-index:999;";
+          div.innerText = msg;
+          document.body.appendChild(div);
+          setTimeout(() => div.remove(), 3000);
+        }
+      }
+
+      const game = new DoudizhuGame();
+      document.getElementById("btn-connect").onclick = () => game.init();
+      document.getElementById("btn-join").onclick = () => game.join();
+    </script>
+  </body>
+</html>
